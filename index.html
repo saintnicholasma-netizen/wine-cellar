@@ -428,6 +428,227 @@ const SORT_OPTIONS = [
 
 const WINDOW_ORDER = { now:0, soon:1, mid:1, wait:2, long:2, cellar:3, vlong:3, unknown:4 };
 
+// ── Aging Curve Logic ──
+// Returns { peakStart, peakEnd, declineStart, totalYears, curYear } relative to vintage
+function getAgingProfile(wine) {
+  var grape = (wine.grapeEn || wine.grape || "").toLowerCase();
+  var region = (wine.regionEn || wine.region || "").toLowerCase();
+  var price = parsePrice(wine.price);
+  var vintage = wine.vintage || 2020;
+  var curYear = 2026;
+  var age = curYear - vintage;
+
+  // Base profile: [peakStart, peakEnd, declineStart, totalYears]
+  // These represent years after vintage
+  var p = [2, 5, 8, 15]; // default red wine
+
+  // Grape-based profiles
+  if (grape.includes("cabernet sauvignon") && !grape.includes("merlot")) {
+    p = [5, 10, 18, 30];
+  } else if (grape.includes("cabernet sauvignon") && grape.includes("merlot")) {
+    p = [4, 8, 15, 25]; // Bordeaux blend
+  } else if (grape.includes("nebbiolo") || grape.includes("barolo") || grape.includes("barbaresco")) {
+    p = [7, 12, 22, 35];
+  } else if (grape.includes("pinot noir")) {
+    p = [3, 7, 12, 20];
+  } else if (grape.includes("sangiovese") || grape.includes("chianti")) {
+    p = [4, 8, 14, 22];
+  } else if (grape.includes("syrah") || grape.includes("shiraz")) {
+    p = [4, 8, 15, 25];
+  } else if (grape.includes("merlot") && !grape.includes("cabernet")) {
+    p = [3, 6, 10, 18];
+  } else if (grape.includes("malbec")) {
+    p = [3, 7, 12, 20];
+  } else if (grape.includes("riesling")) {
+    p = [2, 6, 12, 25];
+  } else if (grape.includes("sauvignon blanc") && !grape.includes("sémillon")) {
+    p = [1, 2, 4, 7];
+  } else if (grape.includes("chardonnay")) {
+    p = [2, 5, 8, 15];
+  } else if (grape.includes("sémillon") || grape.includes("semillon")) {
+    p = [5, 15, 30, 60]; // Sauternes
+  } else if (grape.includes("saperavi")) {
+    p = [4, 8, 14, 22];
+  } else if (grape.includes("corvina") || grape.includes("amarone")) {
+    p = [5, 10, 18, 30];
+  } else if (grape.includes("carmenère")) {
+    p = [3, 7, 12, 18];
+  } else if (grape.includes("touriga") || grape.includes("port")) {
+    p = [8, 20, 35, 60]; // Port
+  } else if (grape.includes("muscat") || grape.includes("zibibbo")) {
+    p = [1, 3, 6, 10];
+  } else if (grape.includes("gros manseng")) {
+    p = [1, 2, 4, 7];
+  } else if (grape.includes("ugni blanc") || grape.includes("cognac")) {
+    p = [5, 20, 40, 80]; // Cognac/spirits
+  }
+
+  // Region adjustments
+  if (region.includes("pauillac") || region.includes("saint-julien") || region.includes("margaux")) {
+    p = p.map(function(v){ return Math.round(v * 1.3); });
+  } else if (region.includes("sauternes")) {
+    p = [5, 15, 30, 60];
+  } else if (region.includes("champagne")) {
+    p = [2, 5, 10, 18];
+  } else if (region.includes("bolgheri")) {
+    p = [5, 10, 18, 30];
+  } else if (region.includes("napa")) {
+    p = [4, 10, 16, 28];
+  } else if (region.includes("cognac")) {
+    p = [5, 20, 40, 80];
+  }
+
+  // Price adjustment: cheap wines age less, expensive wines age more
+  if (price > 0 && price < 15) {
+    p = p.map(function(v){ return Math.max(1, Math.round(v * 0.5)); });
+  } else if (price > 0 && price < 30) {
+    p = p.map(function(v){ return Math.max(1, Math.round(v * 0.7)); });
+  } else if (price > 200) {
+    p = p.map(function(v){ return Math.round(v * 1.3); });
+  } else if (price > 500) {
+    p = p.map(function(v){ return Math.round(v * 1.5); });
+  }
+
+  // Wine window override adjustments
+  if (wine.window === "now" && p[0] > age + 2) {
+    p = p.map(function(v){ return Math.max(1, Math.round(v * 0.6)); });
+  }
+
+  return { peakStart: p[0], peakEnd: p[1], declineStart: p[2], totalYears: p[3], vintage: vintage, curYear: curYear, age: age };
+}
+
+// Generate SVG aging curve points
+function generateCurvePoints(profile, width, height) {
+  var pad = { top: 20, bottom: 30, left: 10, right: 10 };
+  var w = width - pad.left - pad.right;
+  var h = height - pad.top - pad.bottom;
+  var total = profile.totalYears;
+
+  function qualityAt(year) {
+    if (year <= 0) return 20;
+    if (year <= profile.peakStart) {
+      // Rising phase
+      return 20 + 80 * (year / profile.peakStart);
+    } else if (year <= profile.peakEnd) {
+      // Peak plateau
+      return 100;
+    } else if (year <= profile.declineStart) {
+      // Slow decline
+      var pct = (year - profile.peakEnd) / (profile.declineStart - profile.peakEnd);
+      return 100 - 30 * pct;
+    } else if (year <= total) {
+      // Steeper decline
+      var pct2 = (year - profile.declineStart) / (total - profile.declineStart);
+      return 70 - 50 * pct2;
+    }
+    return 20;
+  }
+
+  var points = [];
+  var steps = 60;
+  for (var i = 0; i <= steps; i++) {
+    var year = (i / steps) * total;
+    var q = qualityAt(year);
+    var x = pad.left + (year / total) * w;
+    var y = pad.top + h - (q / 100) * h;
+    points.push({ x: x, y: y, year: year, quality: q });
+  }
+  return { points: points, pad: pad, w: w, h: h, total: total, qualityAt: qualityAt };
+}
+
+// ── AgingCurve Component ──
+function AgingCurve({ wine, dark }) {
+  var profile = getAgingProfile(wine);
+  var width = 300;
+  var height = 150;
+  var curve = generateCurvePoints(profile, width, height);
+  var points = curve.points;
+  var pad = curve.pad;
+
+  // Build SVG path
+  var pathD = "M" + points.map(function(p){ return p.x.toFixed(1)+","+p.y.toFixed(1); }).join(" L");
+
+  // Gradient fill path
+  var fillD = pathD + " L" + (pad.left + curve.w).toFixed(1) + "," + (pad.top + curve.h).toFixed(1) + " L" + pad.left + "," + (pad.top + curve.h).toFixed(1) + " Z";
+
+  // Current year marker
+  var curYearPos = profile.age;
+  if (curYearPos < 0) curYearPos = 0;
+  if (curYearPos > curve.total) curYearPos = curve.total;
+  var curX = pad.left + (curYearPos / curve.total) * curve.w;
+  var curQ = curve.qualityAt(curYearPos);
+  var curY = pad.top + curve.h - (curQ / 100) * curve.h;
+
+  // Peak zone
+  var peakStartX = pad.left + (profile.peakStart / curve.total) * curve.w;
+  var peakEndX = pad.left + (profile.peakEnd / curve.total) * curve.w;
+
+  // Phase label
+  var phase = "";
+  var phaseColor = "";
+  if (profile.age < profile.peakStart) { phase = "\u{1F331} \u6210\u957F\u671F"; phaseColor = "#2563eb"; }
+  else if (profile.age <= profile.peakEnd) { phase = "\u2B50 \u5DC5\u5CF0\u671F"; phaseColor = "#059669"; }
+  else if (profile.age <= profile.declineStart) { phase = "\u{1F34E} \u6210\u719F\u671F"; phaseColor = "#d97706"; }
+  else { phase = "\u{1F342} \u8870\u9000\u671F"; phaseColor = "#dc2626"; }
+
+  var textC = dark ? "#94a3b8" : "#6b7280";
+  var lineC = dark ? "#334155" : "#e5e7eb";
+  var curveColor = dark ? "#60a5fa" : "#3b82f6";
+  var peakBg = dark ? "rgba(5,150,105,0.12)" : "rgba(5,150,105,0.08)";
+  var markerColor = dark ? "#f59e0b" : "#ea580c";
+
+  // Year labels along x-axis
+  var yearLabels = [];
+  var labelCount = 5;
+  for (var li = 0; li <= labelCount; li++) {
+    var yr = Math.round((li / labelCount) * curve.total);
+    var lx = pad.left + (yr / curve.total) * curve.w;
+    yearLabels.push({ x: lx, label: (profile.vintage + yr).toString() });
+  }
+
+  return React.createElement("div", {
+    onClick: function(e) { e.stopPropagation(); },
+    style: { marginTop: 8, marginBottom: 4, padding: "10px 8px", borderRadius: 10, background: dark ? "rgba(15,23,42,0.6)" : "rgba(249,250,251,0.8)", border: dark ? "1px solid #1e293b" : "1px solid #f1f5f9" }
+  },
+    React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 } },
+      React.createElement("span", { style: { fontSize: 11, fontWeight: 700, color: dark ? "#e2e8f0" : "#111827" } }, "\u{1F4C8} \u9648\u5E74\u66F2\u7EBF"),
+      React.createElement("span", { style: { fontSize: 10, fontWeight: 600, color: phaseColor, background: dark ? "rgba(0,0,0,0.3)" : "rgba(255,255,255,0.8)", padding: "2px 8px", borderRadius: 10 } }, phase)
+    ),
+    React.createElement("svg", { width: "100%", viewBox: "0 0 " + width + " " + height, style: { display: "block" } },
+      // Peak zone highlight
+      React.createElement("rect", { x: peakStartX, y: pad.top, width: peakEndX - peakStartX, height: curve.h, fill: peakBg, rx: 3 }),
+      React.createElement("text", { x: (peakStartX + peakEndX) / 2, y: pad.top + 12, textAnchor: "middle", fontSize: 8, fill: "#059669", opacity: 0.7 }, "\u5DC5\u5CF0\u671F"),
+      // Grid lines
+      React.createElement("line", { x1: pad.left, y1: pad.top, x2: pad.left + curve.w, y2: pad.top, stroke: lineC, strokeWidth: 0.5, strokeDasharray: "3,3" }),
+      React.createElement("line", { x1: pad.left, y1: pad.top + curve.h * 0.5, x2: pad.left + curve.w, y2: pad.top + curve.h * 0.5, stroke: lineC, strokeWidth: 0.5, strokeDasharray: "3,3" }),
+      React.createElement("line", { x1: pad.left, y1: pad.top + curve.h, x2: pad.left + curve.w, y2: pad.top + curve.h, stroke: lineC, strokeWidth: 0.5 }),
+      // Fill gradient
+      React.createElement("defs", null,
+        React.createElement("linearGradient", { id: "curveGrad-" + wine.id, x1: 0, y1: 0, x2: 0, y2: 1 },
+          React.createElement("stop", { offset: "0%", stopColor: curveColor, stopOpacity: 0.25 }),
+          React.createElement("stop", { offset: "100%", stopColor: curveColor, stopOpacity: 0.02 })
+        )
+      ),
+      React.createElement("path", { d: fillD, fill: "url(#curveGrad-" + wine.id + ")" }),
+      // Curve line
+      React.createElement("path", { d: pathD, fill: "none", stroke: curveColor, strokeWidth: 2, strokeLinecap: "round", strokeLinejoin: "round" }),
+      // Current year marker
+      React.createElement("line", { x1: curX, y1: pad.top, x2: curX, y2: pad.top + curve.h, stroke: markerColor, strokeWidth: 1, strokeDasharray: "3,2" }),
+      React.createElement("circle", { cx: curX, cy: curY, r: 4, fill: markerColor, stroke: "#fff", strokeWidth: 1.5 }),
+      React.createElement("text", { x: curX, y: pad.top - 5, textAnchor: "middle", fontSize: 8, fontWeight: 700, fill: markerColor }, "\u73B0\u5728"),
+      // X-axis year labels
+      yearLabels.map(function(yl, idx) {
+        return React.createElement("text", { key: idx, x: yl.x, y: pad.top + curve.h + 14, textAnchor: "middle", fontSize: 7.5, fill: textC }, yl.label);
+      })
+    ),
+    React.createElement("div", { style: { display: "flex", justifyContent: "space-between", fontSize: 9, color: textC, marginTop: 4 } },
+      React.createElement("span", null, "\u5DC5\u5CF0: ", profile.vintage + profile.peakStart, "-", profile.vintage + profile.peakEnd),
+      React.createElement("span", null, "\u74F6\u9F84: ", profile.age, "\u5E74"),
+      React.createElement("span", null, "\u5EFA\u8BAE\u4FDD\u5B58\u81F3: ", profile.vintage + profile.declineStart)
+    )
+  );
+}
+
 // Parse price string to a numeric value (first number found) for sorting
 function parsePrice(priceStr) {
   if (!priceStr) return 0;
@@ -797,6 +1018,7 @@ function WineCard({ wine, onDelete, onDrank, onUpdate, dark, idx, showRMB }) {
       ),
       isDrank && wine.drankDate && React.createElement("div", { style:{ color:mutedText, marginBottom:4, fontSize:11 } }, "\u{1F4C5} \u54C1\u996E\u65E5\u671F\uFF1A", wine.drankDate),
       wine.price && React.createElement("div", { style:{ color:mutedText, marginBottom:4 } }, "\u{1F4B0} \u4EF7\u683C\uFF1A", showRMB ? priceToRMB(wine.price) : wine.price, showRMB && wine.price !== priceToRMB(wine.price) ? " (" + wine.price + ")" : ""),
+      wine.vintage && wine.status !== "drank" && React.createElement(AgingCurve, { wine: wine, dark: dark }),
       wine.status === "owned" && React.createElement("div", { style:{ display:"flex", alignItems:"center", gap:8, marginTop:6, marginBottom:4 } },
         React.createElement("span", { style:{ fontSize:11, color:subText } }, "\u{1F4E6} \u6570\u91CF\uFF1A"),
         React.createElement("button", {
