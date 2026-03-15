@@ -1494,8 +1494,151 @@ function DrankHistory({ wines, dark, onClose }) {
   );
 }
 
+// ── Recommendation Guide Overlay ──
+function getRecommendReason(wine) {
+  var reasons = [];
+  var awards = wine.awards || "";
+  var notes = wine.notes || "";
+  var price = parsePrice(wine.price);
+  var grape = (wine.grapeEn || wine.grape || "").toLowerCase();
+  var region = (wine.regionEn || wine.region || "").toLowerCase();
+
+  // Award-based reasons
+  if (awards.includes("Best in Show")) reasons.push("DWWA 赛事最优奖得主，全球顶级评审一致认可");
+  else if (awards.includes("Platinum") || awards.includes("白金")) reasons.push("DWWA 白金奖高分，品质远超同价位");
+  else if (awards.includes("Gold") || awards.includes("金")) reasons.push("DWWA 金奖，品质出色性价比高");
+  else if (awards) reasons.push("获奖酒款：" + awards.substring(0, 40));
+
+  // Price-value
+  if (price > 0 && price < 30) reasons.push("入门价位优质选择，适合日常品饮和探索新产区");
+  else if (price >= 30 && price < 60) reasons.push("中等价位的优质酒款，品质与价格平衡极佳");
+  else if (price >= 60 && price < 120) reasons.push("高品质收藏级酒款，适合特殊场合和长期陈年");
+  else if (price >= 120) reasons.push("顶级收藏酒款，值得珍藏等待最佳饮用时机");
+
+  // Grape/region specialties
+  if (grape.includes("nebbiolo") || region.includes("barolo")) reasons.push("意大利酒王巴罗洛，内比奥罗葡萄的终极表达");
+  else if (grape.includes("marselan") && (region.includes("ningxia") || region.includes("宁夏"))) reasons.push("中国马瑟兰标杆，展现贺兰山东麓独特风土");
+  else if (region.includes("sauternes")) reasons.push("苏玳贵腐甜白，甜酒世界的经典代表");
+  else if (grape.includes("port") || grape.includes("touriga")) reasons.push("杜罗河谷波特酒，适合长期陈年的经典甜酒");
+  else if (region.includes("bolgheri") || notes.includes("Super Tuscan") || notes.includes("超级托斯卡纳")) reasons.push("超级托斯卡纳新星，意大利现代酿酒的杰出代表");
+  else if (grape.includes("malbec") && region.includes("mendoza")) reasons.push("门多萨高海拔马尔贝克，阿根廷旗舰品种");
+  else if (grape.includes("carmenère")) reasons.push("智利特色品种佳美娜，有机酿造的独特风味");
+
+  // Window-based
+  if (wine.window === "now") reasons.push("现在就可以开瓶享用");
+  else if (wine.window === "mid") reasons.push("适合现在入手，放置3-5年达到最佳状态");
+  else if (wine.window === "long" || wine.window === "vlong") reasons.push("极佳陈年潜力，越放越好的投资型酒款");
+
+  // Priority
+  if (wine.priority) reasons.push("优先推荐购买");
+
+  return reasons;
+}
+
+function RecommendationGuide({ wines, dark, onClose, onUpdate, showRMB }) {
+  var rec = wines.filter(function(w) { return w.status === "recommended"; });
+
+  var overlayBg = dark ? "rgba(0,0,0,0.7)" : "rgba(0,0,0,0.5)";
+  var panelBg = dark ? "#0f172a" : "#fafafa";
+  var textColor = dark ? "#e2e8f0" : "#111827";
+  var subText = dark ? "#94a3b8" : "#6b7280";
+  var cardBg = dark ? "#1e293b" : "#fff";
+  var cardBorder = dark ? "1px solid #334155" : "1px solid #e5e7eb";
+
+  // Group by window
+  var priority = rec.filter(function(w) { return w.priority; });
+  var others = rec.filter(function(w) { return !w.priority; });
+
+  return React.createElement("div", {
+    onClick: onClose,
+    style: { position:"fixed", top:0, left:0, right:0, bottom:0, background:overlayBg, zIndex:1000, display:"flex", justifyContent:"center", alignItems:"flex-start", padding:"40px 16px", overflowY:"auto" }
+  },
+    React.createElement("div", {
+      onClick: function(e) { e.stopPropagation(); },
+      style: { background:panelBg, borderRadius:20, maxWidth:600, width:"100%", padding:"24px 20px", maxHeight:"85vh", overflowY:"auto", boxShadow:"0 20px 60px rgba(0,0,0,0.3)", animation:"fadeInUp 0.3s ease-out" }
+    },
+      // Header
+      React.createElement("div", { style:{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 } },
+        React.createElement("div", null,
+          React.createElement("h2", { style:{ fontSize:20, fontWeight:800, margin:0, color:"#ea580c", fontFamily:"'Georgia','STSong','SimSun',serif" } }, "\u{1F6D2} \u91C7\u8D2D\u63A8\u8350"),
+          React.createElement("p", { style:{ fontSize:12, color:subText, margin:"4px 0 0 0" } }, rec.length, " \u6B3E\u63A8\u8350\u9152\u6B3E", priority.length > 0 ? " \u00B7 " + priority.length + " \u6B3E\u4F18\u5148" : "")
+        ),
+        React.createElement("button", { onClick:onClose, style:{ background:"none", border:"none", fontSize:22, cursor:"pointer", color:subText, padding:4 } }, "\u2715")
+      ),
+
+      rec.length === 0 && React.createElement("div", { style:{ textAlign:"center", padding:40, color:subText } },
+        React.createElement("div", { style:{ fontSize:36, marginBottom:8 } }, "\u2705"),
+        React.createElement("div", { style:{ fontSize:13 } }, "\u6240\u6709\u63A8\u8350\u9152\u6B3E\u5DF2\u5165\u624B\uFF01")
+      ),
+
+      // Priority wines first
+      priority.length > 0 && React.createElement("div", { style:{ marginBottom:12 } },
+        React.createElement("div", { style:{ fontSize:12, fontWeight:700, color:"#dc2626", marginBottom:8, display:"flex", alignItems:"center", gap:4 } }, "\u{1F525} \u4F18\u5148\u8D2D\u4E70")
+      ),
+
+      rec.map(function(wine, idx) {
+        var reasons = getRecommendReason(wine);
+        var flag = COUNTRY_FLAGS[wine.country] || "\u{1F377}";
+        var wm = WINDOW_META[wine.window] || WINDOW_META.now;
+        var isPriority = wine.priority;
+
+        return React.createElement("div", {
+          key: wine.id,
+          style: { background:cardBg, borderRadius:14, padding:"16px 18px", border: isPriority ? (dark ? "1.5px solid #dc2626" : "1.5px solid #fca5a5") : cardBorder, marginBottom:12, animation:"fadeInUp 0.3s ease-out", animationDelay:(idx*0.04)+"s" }
+        },
+          // Header
+          React.createElement("div", { style:{ display:"flex", gap:12, alignItems:"flex-start", marginBottom:10 } },
+            React.createElement("div", { style:{ flexShrink:0, marginTop:2 } },
+              React.createElement(WineBottle, { color: isPriority ? "#dc2626" : "#ea580c", size:26 })
+            ),
+            React.createElement("div", { style:{ flex:1 } },
+              React.createElement("div", { style:{ display:"flex", justifyContent:"space-between", alignItems:"flex-start" } },
+                React.createElement("div", { style:{ fontSize:15, fontWeight:700, color:textColor, lineHeight:1.3, flex:1 } }, wine.name),
+                isPriority && React.createElement("span", { style:{ fontSize:9, padding:"2px 8px", borderRadius:10, background:"linear-gradient(135deg,#dc2626,#ef4444)", color:"#fff", fontWeight:700, flexShrink:0, marginLeft:6 } }, "\u{1F525} \u4F18\u5148")
+              ),
+              wine.nameEn && React.createElement("div", { style:{ fontSize:11, color:subText, marginTop:1 } }, wine.nameEn),
+              React.createElement("div", { style:{ fontSize:11, color:subText, marginTop:3 } }, flag, " ", wine.region, " \u00B7 ", wine.grape),
+              React.createElement("div", { style:{ display:"flex", gap:4, marginTop:6, flexWrap:"wrap" } },
+                React.createElement("span", { style:{ fontSize:10, padding:"2px 8px", borderRadius:12, background: dark ? "rgba(5,150,105,0.15)" : wm.bg, color:wm.color, fontWeight:600 } }, wm.icon, " ", wm.label),
+                wine.price && React.createElement("span", { style:{ fontSize:10, padding:"2px 8px", borderRadius:12, background: dark ? "rgba(234,88,12,0.15)" : "#fff7ed", color: dark ? "#fb923c" : "#9a3412", fontWeight:600 } }, "\u{1F4B0} ", showRMB ? priceToRMB(wine.price) : wine.price),
+                wine.vintage && React.createElement("span", { style:{ fontSize:10, padding:"2px 8px", borderRadius:12, background: dark ? "rgba(0,0,0,0.2)" : "#f1f5f9", color:subText, fontWeight:500 } }, wine.vintage)
+              )
+            )
+          ),
+
+          // Why recommended
+          reasons.length > 0 && React.createElement("div", { style:{ background: dark ? "rgba(234,88,12,0.08)" : "#fff7ed", borderRadius:10, padding:"10px 12px", marginBottom:10, border: dark ? "1px solid rgba(234,88,12,0.2)" : "1px solid #fed7aa" } },
+            React.createElement("div", { style:{ fontSize:11, fontWeight:700, color:"#ea580c", marginBottom:4 } }, "\u{1F4A1} \u63A8\u8350\u7406\u7531"),
+            reasons.map(function(r, ri) {
+              return React.createElement("div", { key:ri, style:{ fontSize:11, color: dark ? "#fdba74" : "#9a3412", lineHeight:1.5, paddingLeft:12, position:"relative" } },
+                React.createElement("span", { style:{ position:"absolute", left:0, color:"#ea580c" } }, "\u2022"),
+                r
+              );
+            })
+          ),
+
+          // Awards
+          wine.awards && React.createElement("div", { style:{ fontSize:10, color:"#f59e0b", marginBottom:6 } }, "\u{1F3C6} ", wine.awards),
+
+          // Notes
+          wine.notes && React.createElement("div", { style:{ fontSize:10, color:subText, fontStyle:"italic", marginBottom:8, lineHeight:1.4 } }, "\u{1F4DD} ", wine.notes),
+
+          // Pairing
+          wine.pairing && React.createElement("div", { style:{ fontSize:10, color:subText, marginBottom:8 } }, "\u{1F37D}\uFE0F \u914D\u9910: ", wine.pairing),
+
+          // Buy button
+          onUpdate && React.createElement("button", {
+            onClick: function(e) { e.stopPropagation(); onUpdate(wine.id, { status:"owned", qty:1 }); },
+            style: { padding:"7px 18px", borderRadius:8, border:"none", background:"linear-gradient(135deg,#059669,#10b981)", color:"#fff", fontSize:11, fontWeight:600, cursor:"pointer", boxShadow:"0 2px 8px rgba(16,185,129,0.3)" }
+          }, "\u{1F6D2} \u5DF2\u4E70\u5165\u624B")
+        );
+      })
+    )
+  );
+}
+
 // ── Stats ──
-function Stats({ wines, dark, onDrinkGuide, onCountryExplorer, onDrankHistory }) {
+function Stats({ wines, dark, onDrinkGuide, onCountryExplorer, onDrankHistory, onRecommendation }) {
   const owned = wines.filter(w=>w.status==="owned");
   const drank = wines.filter(w=>w.status==="drank");
   const countries = [...new Set(wines.map(w=>w.country))];
@@ -1516,6 +1659,11 @@ function Stats({ wines, dark, onDrinkGuide, onCountryExplorer, onDrankHistory })
       React.createElement("div", { style:{ fontSize:22, fontWeight:800, color:"#059669" } }, drink.length),
       React.createElement("div", { style:{ fontSize:11, color:"#065f46" } }, "\u{1F377} \u5EFA\u8BAE\u54C1\u996E"),
       drink.length > 0 && React.createElement("div", { style:{ fontSize:9, color:"#059669", marginTop:2, opacity:0.7 } }, "\u70B9\u51FB\u67E5\u770B\u6307\u5357 \u2192")
+    ),
+    React.createElement("div", { className:"stat-card", onClick:function(){ onRecommendation && onRecommendation(); }, style:Object.assign({}, cardS, dark ? {} : { background:"#fff7ed", border:"1px solid #fed7aa" }, { cursor: wines.filter(function(w){return w.status==="recommended"}).length > 0 ? "pointer" : "default", transition:"transform 0.15s" }) },
+      React.createElement("div", { style:{ fontSize:22, fontWeight:800, color:"#ea580c" } }, wines.filter(function(w){return w.status==="recommended"}).length),
+      React.createElement("div", { style:{ fontSize:11, color:"#9a3412" } }, "\u{1F6D2} \u91C7\u8D2D\u63A8\u8350"),
+      wines.filter(function(w){return w.status==="recommended"}).length > 0 && React.createElement("div", { style:{ fontSize:9, color:"#ea580c", marginTop:2, opacity:0.7 } }, "\u70B9\u51FB\u67E5\u770B\u8BE6\u60C5 \u2192")
     ),
     React.createElement("div", { className:"stat-card", onClick:function(){ onDrankHistory && onDrankHistory(); }, style:Object.assign({}, cardS, dark ? {} : { background:"#f5f3ff", border:"1px solid #c4b5fd" }, { cursor:"pointer", transition:"transform 0.15s" }) },
       React.createElement("div", { style:{ fontSize:22, fontWeight:800, color:"#6366f1" } }, drank.length),
@@ -1546,12 +1694,14 @@ function Cellar({ wines, onAdd, onDelete, onUpdate, onImport, title, sub, dark }
   const [showDrinkGuide, setShowDrinkGuide] = useState(false);
   const [showCountryExplorer, setShowCountryExplorer] = useState(false);
   const [showDrankHistory, setShowDrankHistory] = useState(false);
+  const [showRecommendation, setShowRecommendation] = useState(false);
   const fileRef = useRef(null);
 
   const owned = wines.filter(w=>w.status==="owned");
   const rec = wines.filter(w=>w.status==="recommended");
   const drank = wines.filter(w=>w.status==="drank");
-  const filtered = flt==="all" ? wines : flt==="owned" ? owned : flt==="recommended" ? rec : flt==="drank" ? drank : wines.filter(w=>w.window===flt);
+  const nonRec = wines.filter(w=>w.status!=="recommended");
+  const filtered = flt==="all" ? nonRec : flt==="owned" ? owned : flt==="drank" ? drank : nonRec.filter(w=>w.window===flt);
   const searched = searchWines(filtered, search);
   const list = sortWines(searched, sort);
   const drink = owned.filter(w=>{const r=getRec(w);return r.t.includes("\u54C1\u996E")||r.t.includes("\u6700\u4F73\u671F")});
@@ -1620,8 +1770,9 @@ function Cellar({ wines, onAdd, onDelete, onUpdate, onImport, title, sub, dark }
     showDrinkGuide && React.createElement(DrinkGuide, { wines:wines, dark:dark, onClose:function(){setShowDrinkGuide(false)}, onDrank:function(wine){setShowDrinkGuide(false);setDrankWine(wine)}, showRMB:showRMB }),
     showCountryExplorer && React.createElement(CountryExplorer, { wines:wines, dark:dark, onClose:function(){setShowCountryExplorer(false)} }),
     showDrankHistory && React.createElement(DrankHistory, { wines:wines, dark:dark, onClose:function(){setShowDrankHistory(false)} }),
+    showRecommendation && React.createElement(RecommendationGuide, { wines:wines, dark:dark, onClose:function(){setShowRecommendation(false)}, onUpdate:onUpdate, showRMB:showRMB }),
 
-    React.createElement(Stats, { wines:wines, dark:dark, onDrinkGuide:function(){if(drink.length>0)setShowDrinkGuide(true)}, onCountryExplorer:function(){setShowCountryExplorer(true)}, onDrankHistory:function(){setShowDrankHistory(true)} }),
+    React.createElement(Stats, { wines:wines, dark:dark, onDrinkGuide:function(){if(drink.length>0)setShowDrinkGuide(true)}, onCountryExplorer:function(){setShowCountryExplorer(true)}, onDrankHistory:function(){setShowDrankHistory(true)}, onRecommendation:function(){if(rec.length>0)setShowRecommendation(true)} }),
 
     // Search + Sort + Import/Export
     React.createElement("div", { style:{ marginBottom:14, display:"flex", flexDirection:"column", gap:8 } },
@@ -1659,7 +1810,7 @@ function Cellar({ wines, onAdd, onDelete, onUpdate, onImport, title, sub, dark }
 
     // Filter pills
     React.createElement("div", { style:{ display:"flex", gap:4, marginBottom:14, flexWrap:"wrap" } },
-      [["all","\u5168\u90E8("+wines.length+")"],["owned","\u5DF2\u6709("+owned.length+")"],["recommended","\u63A8\u8350("+rec.length+")"],["drank","\u5DF2\u559D("+drank.length+")"],["now","\u{1F7E2} \u73B0\u996E"],["mid","\u{1F7E1} 3-5\u5E74"],["long","\u{1F534} 5-10\u5E74"],["vlong","\u{1F7E3} 10\u5E74+"]].map(function(arr) {
+      [["all","\u5168\u90E8("+nonRec.length+")"],["owned","\u5DF2\u6709("+owned.length+")"],["drank","\u5DF2\u559D("+drank.length+")"],["now","\u{1F7E2} \u73B0\u996E"],["mid","\u{1F7E1} 3-5\u5E74"],["long","\u{1F534} 5-10\u5E74"],["vlong","\u{1F7E3} 10\u5E74+"]].map(function(arr) {
         var k = arr[0], v = arr[1];
         return React.createElement("button", { className:"filter-btn", key:k, onClick:function(){setFlt(k)}, style:{ padding:"5px 12px", borderRadius:20, border:flt===k?"2px solid "+pillActiveBg:pillBorder, background:flt===k?pillActiveBg:pillBg, color:flt===k?"#fff":pillColor, fontSize:11, fontWeight:600, cursor:"pointer", fontFamily:"inherit" } }, v);
       })
