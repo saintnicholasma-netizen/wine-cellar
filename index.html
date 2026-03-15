@@ -1962,9 +1962,17 @@ function App() {
   const [ok, setOk] = useState(false);
   const [dark, setDark] = useState(false);
 
+  // Merge: keep user's existing data but add any new wines from defaults
+  function mergeWines(stored, defaults) {
+    var ids = {};
+    stored.forEach(function(w) { ids[w.id] = true; });
+    var newWines = defaults.filter(function(w) { return !ids[w.id]; });
+    return newWines.length > 0 ? stored.concat(newWines) : stored;
+  }
+
   useEffect(function(){
-    try { var d = localStorage.getItem("cellar-nick-v2"); if(d) setNw(JSON.parse(d)); } catch(e){}
-    try { var d2 = localStorage.getItem("cellar-parents-v2"); if(d2) setPw(JSON.parse(d2)); } catch(e){}
+    try { var d = localStorage.getItem("cellar-nick-v2"); if(d) { var parsed = JSON.parse(d); setNw(mergeWines(parsed, NICK_WINES)); } } catch(e){}
+    try { var d2 = localStorage.getItem("cellar-parents-v2"); if(d2) { var parsed2 = JSON.parse(d2); setPw(mergeWines(parsed2, PARENT_WINES)); } } catch(e){}
     try { var d3 = localStorage.getItem("cellar-dark"); if(d3==="true") setDark(true); } catch(e){}
     try { var d4 = localStorage.getItem("cellar-visited"); if(d4==="true") setPage("cellar"); } catch(e){}
     setOk(true);
