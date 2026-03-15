@@ -1114,8 +1114,227 @@ function AddForm({ onAdd, dark }) {
   );
 }
 
+// ── Drink Guide Logic ──
+function getDrinkGuide(wine) {
+  var grape = (wine.grapeEn || wine.grape || "").toLowerCase();
+  var region = (wine.regionEn || wine.region || "").toLowerCase();
+  var price = parsePrice(wine.price);
+  var name = wine.name || wine.nameEn || "";
+
+  // Occasion suggestions based on wine type
+  var occasions = [];
+  var restaurants = [];
+  var reason = "";
+  var servingTemp = "";
+  var decantTime = "";
+
+  // Price tier
+  var tier = price > 200 ? "premium" : price > 50 ? "mid" : "everyday";
+
+  // Determine wine color/type
+  var isWhite = grape.includes("chardonnay") || grape.includes("sauvignon blanc") || grape.includes("riesling") || grape.includes("gros manseng") || grape.includes("sémillon") || grape.includes("semillon") || grape.includes("muscat") || grape.includes("zibibbo");
+  var isSweet = region.includes("sauternes") || grape.includes("muscat") || grape.includes("zibibbo") || name.includes("贵腐") || name.includes("甜");
+  var isPort = grape.includes("port") || grape.includes("touriga") || name.includes("波特");
+  var isSparkling = region.includes("champagne") || name.includes("香槟") || name.includes("起泡");
+  var isCognac = grape.includes("cognac") || grape.includes("ugni blanc") || name.includes("干邑") || name.includes("白兰地");
+
+  if (isCognac) {
+    occasions = ["晚餐后独酌", "商务宴请尾酒", "冬日壁炉旁品鉴", "特殊纪念日"];
+    restaurants = ["高端西餐厅包间", "雪茄吧", "威士忌/白兰地吧"];
+    reason = "干邑适合餐后慢品，搭配巧克力或雪茄，温度回升后香气更复杂";
+    servingTemp = "18-22°C（可手掌温杯）";
+    decantTime = "无需醒酒，直接品饮";
+  } else if (isSparkling) {
+    occasions = ["庆祝活动开场", "周末早午餐", "约会之夜", "生日/纪念日"];
+    restaurants = ["法式餐厅", "海鲜餐厅", "高端日料", "户外露台餐厅"];
+    reason = "香槟的气泡和酸度能唤醒味蕾，是完美的开场酒";
+    servingTemp = "6-8°C（冰桶冰镇30分钟）";
+    decantTime = "无需醒酒";
+  } else if (isPort) {
+    occasions = ["冬季晚餐尾声", "节日派对", "朋友聚会甜酒品鉴", "圣诞/新年"];
+    restaurants = ["西式牛排馆", "葡萄酒吧", "高端甜品店"];
+    reason = "波特酒浓郁甜蜜，适合在饱餐一顿后慢慢品味，尤其搭配蓝纹奶酪";
+    servingTemp = "14-18°C";
+    decantTime = tier === "premium" ? "建议醒酒2-4小时" : "无需醒酒或轻微醒酒30分钟";
+  } else if (isSweet) {
+    occasions = ["精致甜品搭配", "鹅肝开胃菜", "下午茶时光", "浪漫晚餐收尾"];
+    restaurants = ["法式高级餐厅", "精品甜品店", "鹅肝/松露专门店"];
+    reason = "贵腐甜白的蜂蜜、杏仁风味与鹅肝或蓝纹奶酪是经典搭配";
+    servingTemp = "8-10°C";
+    decantTime = "无需醒酒";
+  } else if (isWhite) {
+    occasions = ["夏日户外聚餐", "海鲜大餐", "轻松周末午餐", "朋友小聚"];
+    restaurants = ["日式料理", "海鲜餐厅", "泰式/越南菜", "意大利餐厅"];
+    reason = "白葡萄酒清爽的酸度和果味适合温暖天气和海鲜/白肉料理";
+    servingTemp = "8-12°C";
+    decantTime = "无需醒酒";
+  } else {
+    // Red wines
+    if (tier === "premium") {
+      occasions = ["重要纪念日", "家庭节日盛宴", "高端商务晚宴", "品酒会主角"];
+      restaurants = ["米其林餐厅", "高端牛排馆", "法式fine dining", "私人会所"];
+      reason = "高品质红酒值得一个隆重的场合，搭配顶级红肉或松露菜肴能充分展现其复杂度";
+      decantTime = "建议醒酒1-3小时";
+    } else if (tier === "mid") {
+      occasions = ["周末烧烤聚会", "家庭晚餐", "朋友聚餐", "节日家宴"];
+      restaurants = ["意大利餐厅", "西班牙小酒馆", "中高端中餐厅", "烤肉店"];
+      reason = "中等价位的优质红酒，适合热闹的聚餐场合，不会过于正式也不失品质";
+      decantTime = "建议醒酒30-60分钟";
+    } else {
+      occasions = ["日常晚餐", "轻松电影之夜", "火锅/烧烤", "随意小聚"];
+      restaurants = ["家庭厨房", "比萨店", "烧烤摊", "中式小馆"];
+      reason = "适合日常饮用的红酒，无需特别场合，开瓶即享";
+      decantTime = "无需或轻微醒酒15分钟";
+    }
+
+    // Regional specifics
+    if (region.includes("bordeaux") || region.includes("波尔多")) {
+      servingTemp = "16-18°C";
+    } else if (region.includes("burgundy") || region.includes("勃艮第")) {
+      servingTemp = "14-16°C";
+      if (tier === "premium") { restaurants = ["法式fine dining", "勃艮第风格餐厅", "高端日料", "私人会所"]; }
+    } else if (region.includes("tuscany") || region.includes("托斯卡纳")) {
+      servingTemp = "16-18°C";
+      restaurants = tier === "premium" ? ["意大利fine dining", "松露餐厅", "高端牛排馆"] : ["意大利餐厅", "比萨/意面馆", "烤肉店"];
+    } else if (region.includes("napa")) {
+      servingTemp = "16-18°C";
+    } else if (region.includes("rhône") || region.includes("罗讷")) {
+      servingTemp = "16-18°C";
+      occasions = tier === "everyday" ? ["烧烤之夜", "地中海风味晚餐", "朋友聚会"] : occasions;
+    } else {
+      servingTemp = "15-18°C";
+    }
+  }
+
+  // Pairing details from wine data
+  var pairing = wine.pairing || "";
+  var pairingDetail = "";
+  if (pairing) {
+    pairingDetail = pairing;
+  }
+
+  return {
+    occasions: occasions,
+    restaurants: restaurants,
+    reason: reason,
+    servingTemp: servingTemp,
+    decantTime: decantTime,
+    pairingDetail: pairingDetail,
+    tier: tier
+  };
+}
+
+// ── DrinkGuide Overlay ──
+function DrinkGuide({ wines, dark, onClose, onDrank, showRMB }) {
+  var drink = wines.filter(function(w) {
+    return w.status === "owned" && (function() { var r = getRec(w); return r.t.includes("\u54C1\u996E") || r.t.includes("\u6700\u4F73\u671F"); })();
+  });
+
+  var overlayBg = dark ? "rgba(0,0,0,0.7)" : "rgba(0,0,0,0.5)";
+  var panelBg = dark ? "#0f172a" : "#fafafa";
+  var textColor = dark ? "#e2e8f0" : "#111827";
+  var subText = dark ? "#94a3b8" : "#6b7280";
+  var cardBg = dark ? "#1e293b" : "#fff";
+  var cardBorder = dark ? "1px solid #334155" : "1px solid #e5e7eb";
+
+  return React.createElement("div", {
+    onClick: onClose,
+    style: { position:"fixed", top:0, left:0, right:0, bottom:0, background:overlayBg, zIndex:1000, display:"flex", justifyContent:"center", alignItems:"flex-start", padding:"40px 16px", overflowY:"auto" }
+  },
+    React.createElement("div", {
+      onClick: function(e) { e.stopPropagation(); },
+      style: { background:panelBg, borderRadius:20, maxWidth:600, width:"100%", padding:"24px 20px", maxHeight:"85vh", overflowY:"auto", boxShadow:"0 20px 60px rgba(0,0,0,0.3)", animation:"fadeInUp 0.3s ease-out" }
+    },
+      // Header
+      React.createElement("div", { style:{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 } },
+        React.createElement("div", null,
+          React.createElement("h2", { style:{ fontSize:20, fontWeight:800, margin:0, color:"#059669", fontFamily:"'Georgia','STSong','SimSun',serif" } }, "\u{1F377} \u54C1\u996E\u6307\u5357"),
+          React.createElement("p", { style:{ fontSize:12, color:subText, margin:"4px 0 0 0" } }, drink.length, " \u6B3E\u9152\u73B0\u5728\u9002\u5408\u54C1\u996E")
+        ),
+        React.createElement("button", { onClick:onClose, style:{ background:"none", border:"none", fontSize:22, cursor:"pointer", color:subText, padding:4 } }, "\u2715")
+      ),
+
+      // Wine cards
+      drink.length === 0 && React.createElement("div", { style:{ textAlign:"center", padding:32, color:subText } }, "\u6682\u65E0\u5EFA\u8BAE\u73B0\u996E\u7684\u9152\u6B3E"),
+      drink.map(function(wine, idx) {
+        var guide = getDrinkGuide(wine);
+        var flag = COUNTRY_FLAGS[wine.country] || "\u{1F377}";
+        var wm = WINDOW_META[wine.window] || WINDOW_META.now;
+
+        return React.createElement("div", {
+          key: wine.id,
+          style: { background:cardBg, borderRadius:14, padding:"16px 18px", border:cardBorder, marginBottom:12, animation:"fadeInUp 0.3s ease-out", animationDelay:(idx*0.05)+"s" }
+        },
+          // Wine header
+          React.createElement("div", { style:{ display:"flex", gap:12, alignItems:"flex-start", marginBottom:12 } },
+            React.createElement("div", { style:{ flexShrink:0, marginTop:2 } },
+              React.createElement(WineBottle, { color:"#059669", size:26 })
+            ),
+            React.createElement("div", { style:{ flex:1 } },
+              React.createElement("div", { style:{ fontSize:15, fontWeight:700, color:textColor, lineHeight:1.3 } }, wine.name),
+              wine.nameEn && React.createElement("div", { style:{ fontSize:11, color:subText, marginTop:1 } }, wine.nameEn),
+              React.createElement("div", { style:{ fontSize:11, color:subText, marginTop:3 } }, flag, " ", wine.region),
+              React.createElement("div", { style:{ display:"flex", gap:4, marginTop:6, flexWrap:"wrap" } },
+                React.createElement("span", { style:{ fontSize:10, padding:"2px 8px", borderRadius:12, background: dark ? "rgba(5,150,105,0.15)" : "#ecfdf5", color:"#059669", fontWeight:600 } }, wm.icon, " ", wm.label),
+                wine.price && React.createElement("span", { style:{ fontSize:10, padding:"2px 8px", borderRadius:12, background: dark ? "rgba(30,64,175,0.15)" : "#dbeafe", color: dark ? "#93c5fd" : "#1e40af", fontWeight:600 } }, showRMB ? priceToRMB(wine.price) : wine.price)
+              )
+            )
+          ),
+
+          // Why drink now
+          React.createElement("div", { style:{ background: dark ? "rgba(5,150,105,0.08)" : "#f0fdf4", borderRadius:10, padding:"10px 12px", marginBottom:10, border: dark ? "1px solid rgba(5,150,105,0.2)" : "1px solid #bbf7d0" } },
+            React.createElement("div", { style:{ fontSize:11, fontWeight:700, color:"#059669", marginBottom:4 } }, "\u{1F4A1} \u4E3A\u4EC0\u4E48\u73B0\u5728\u559D"),
+            React.createElement("div", { style:{ fontSize:11, color: dark ? "#a7f3d0" : "#166534", lineHeight:1.5 } }, guide.reason)
+          ),
+
+          // Occasions
+          React.createElement("div", { style:{ marginBottom:8 } },
+            React.createElement("div", { style:{ fontSize:11, fontWeight:700, color:textColor, marginBottom:4 } }, "\u{1F389} \u9002\u5408\u573A\u5408"),
+            React.createElement("div", { style:{ display:"flex", gap:4, flexWrap:"wrap" } },
+              guide.occasions.map(function(occ, i) {
+                return React.createElement("span", { key:i, style:{ fontSize:10, padding:"3px 10px", borderRadius:16, background: dark ? "rgba(99,102,241,0.12)" : "#eef2ff", color: dark ? "#a5b4fc" : "#4338ca", fontWeight:500 } }, occ);
+              })
+            )
+          ),
+
+          // Restaurant suggestions
+          React.createElement("div", { style:{ marginBottom:8 } },
+            React.createElement("div", { style:{ fontSize:11, fontWeight:700, color:textColor, marginBottom:4 } }, "\u{1F37D}\uFE0F \u63A8\u8350\u9910\u5385\u7C7B\u578B"),
+            React.createElement("div", { style:{ display:"flex", gap:4, flexWrap:"wrap" } },
+              guide.restaurants.map(function(rest, i) {
+                return React.createElement("span", { key:i, style:{ fontSize:10, padding:"3px 10px", borderRadius:16, background: dark ? "rgba(245,158,11,0.12)" : "#fffbeb", color: dark ? "#fbbf24" : "#92400e", fontWeight:500 } }, rest);
+              })
+            )
+          ),
+
+          // Food pairing
+          guide.pairingDetail && React.createElement("div", { style:{ marginBottom:8 } },
+            React.createElement("div", { style:{ fontSize:11, fontWeight:700, color:textColor, marginBottom:2 } }, "\u{1F969} \u914D\u9910\u5EFA\u8BAE"),
+            React.createElement("div", { style:{ fontSize:11, color:subText, lineHeight:1.5 } }, guide.pairingDetail)
+          ),
+
+          // Serving info
+          React.createElement("div", { style:{ display:"flex", gap:12, flexWrap:"wrap", marginBottom:8 } },
+            guide.servingTemp && React.createElement("div", { style:{ fontSize:10, color:subText } }, "\u{1F321}\uFE0F \u4F9B\u9152\u6E29\u5EA6: ", React.createElement("span", { style:{ fontWeight:600, color:textColor } }, guide.servingTemp)),
+            guide.decantTime && React.createElement("div", { style:{ fontSize:10, color:subText } }, "\u{1FAD7} \u9192\u9152: ", React.createElement("span", { style:{ fontWeight:600, color:textColor } }, guide.decantTime))
+          ),
+
+          // Tasting notes from wine data
+          wine.notes && React.createElement("div", { style:{ fontSize:10, color:subText, fontStyle:"italic", borderTop: dark ? "1px solid #1e293b" : "1px solid #f1f5f9", paddingTop:6 } }, "\u{1F4DD} ", wine.notes),
+
+          // Action button
+          onDrank && React.createElement("button", {
+            onClick: function(e) { e.stopPropagation(); onDrank(wine); },
+            style: { marginTop:8, padding:"6px 16px", borderRadius:8, border:"none", background:"linear-gradient(135deg,#7c3aed,#6366f1)", color:"#fff", fontSize:11, fontWeight:600, cursor:"pointer", boxShadow:"0 2px 8px rgba(99,102,241,0.3)" }
+          }, (wine.qty||1) > 1 ? "\u{1F37B} \u559D\u6389\u0031\u74F6 (\u5269"+ ((wine.qty||1)-1) +")" : "\u{1F37B} \u5DF2\u559D\u8FD9\u74F6")
+        );
+      })
+    )
+  );
+}
+
 // ── Stats ──
-function Stats({ wines, dark }) {
+function Stats({ wines, dark, onDrinkGuide }) {
   const owned = wines.filter(w=>w.status==="owned");
   const drank = wines.filter(w=>w.status==="drank");
   const countries = [...new Set(wines.map(w=>w.country))];
@@ -1132,9 +1351,10 @@ function Stats({ wines, dark }) {
       React.createElement("div", { style:numS }, owned.reduce(function(s,w){return s+(w.qty||1)},0)),
       React.createElement("div", { style:lblS }, "\u{1F37E} \u5DF2\u6709\u74F6\u6570")
     ),
-    React.createElement("div", { className:"stat-card", style:Object.assign({}, cardS, dark ? {} : { background:"#ecfdf5", border:"1px solid #a7f3d0" }) },
+    React.createElement("div", { className:"stat-card", onClick:function(){ onDrinkGuide && onDrinkGuide(); }, style:Object.assign({}, cardS, dark ? {} : { background:"#ecfdf5", border:"1px solid #a7f3d0" }, { cursor: drink.length > 0 ? "pointer" : "default", transition:"transform 0.15s" }) },
       React.createElement("div", { style:{ fontSize:22, fontWeight:800, color:"#059669" } }, drink.length),
-      React.createElement("div", { style:{ fontSize:11, color:"#065f46" } }, "\u{1F377} \u5EFA\u8BAE\u54C1\u996E")
+      React.createElement("div", { style:{ fontSize:11, color:"#065f46" } }, "\u{1F377} \u5EFA\u8BAE\u54C1\u996E"),
+      drink.length > 0 && React.createElement("div", { style:{ fontSize:9, color:"#059669", marginTop:2, opacity:0.7 } }, "\u70B9\u51FB\u67E5\u770B\u6307\u5357 \u2192")
     ),
     React.createElement("div", { className:"stat-card", style:Object.assign({}, cardS, dark ? {} : { background:"#f5f3ff", border:"1px solid #c4b5fd" }) },
       React.createElement("div", { style:{ fontSize:22, fontWeight:800, color:"#6366f1" } }, drank.length),
@@ -1160,6 +1380,7 @@ function Cellar({ wines, onAdd, onDelete, onUpdate, onImport, title, sub, dark }
   const [showRMB, setShowRMB] = useState(false);
   const [showImportMsg, setShowImportMsg] = useState("");
   const [drankWine, setDrankWine] = useState(null);
+  const [showDrinkGuide, setShowDrinkGuide] = useState(false);
   const fileRef = useRef(null);
 
   const owned = wines.filter(w=>w.status==="owned");
@@ -1231,7 +1452,9 @@ function Cellar({ wines, onAdd, onDelete, onUpdate, onImport, title, sub, dark }
       React.createElement("p", { style:{ fontSize:12, color: dark ? "#64748b" : "#6b7280", margin:0 } }, sub)
     ),
 
-    React.createElement(Stats, { wines:wines, dark:dark }),
+    showDrinkGuide && React.createElement(DrinkGuide, { wines:wines, dark:dark, onClose:function(){setShowDrinkGuide(false)}, onDrank:function(wine){setShowDrinkGuide(false);setDrankWine(wine)}, showRMB:showRMB }),
+
+    React.createElement(Stats, { wines:wines, dark:dark, onDrinkGuide:function(){if(drink.length>0)setShowDrinkGuide(true)} }),
 
     // Search + Sort + Import/Export
     React.createElement("div", { style:{ marginBottom:14, display:"flex", flexDirection:"column", gap:8 } },
@@ -1267,9 +1490,12 @@ function Cellar({ wines, onAdd, onDelete, onUpdate, onImport, title, sub, dark }
       )
     ),
 
-    // Drink now recommendation
-    drink.length > 0 && React.createElement("div", { style:{ background: dark ? "linear-gradient(135deg,rgba(5,150,105,0.15),rgba(4,120,87,0.1))" : "linear-gradient(135deg,#ecfdf5,#d1fae5)", borderRadius:12, padding:14, marginBottom:14, border: dark ? "1px solid rgba(5,150,105,0.3)" : "1px solid #a7f3d0" } },
-      React.createElement("div", { style:{ fontSize:12, fontWeight:700, color:"#059669", marginBottom:4 } }, "\u{1F377} \u73B0\u5728\u63A8\u8350\u54C1\u996E"),
+    // Drink now recommendation (clickable)
+    drink.length > 0 && React.createElement("div", { onClick:function(){setShowDrinkGuide(true)}, style:{ background: dark ? "linear-gradient(135deg,rgba(5,150,105,0.15),rgba(4,120,87,0.1))" : "linear-gradient(135deg,#ecfdf5,#d1fae5)", borderRadius:12, padding:14, marginBottom:14, border: dark ? "1px solid rgba(5,150,105,0.3)" : "1px solid #a7f3d0", cursor:"pointer", transition:"transform 0.15s" } },
+      React.createElement("div", { style:{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:4 } },
+        React.createElement("span", { style:{ fontSize:12, fontWeight:700, color:"#059669" } }, "\u{1F377} \u73B0\u5728\u63A8\u8350\u54C1\u996E"),
+        React.createElement("span", { style:{ fontSize:10, color:"#059669", opacity:0.7 } }, "\u70B9\u51FB\u67E5\u770B\u8BE6\u60C5 \u2192")
+      ),
       React.createElement("div", { style:{ fontSize:11, color:"#047857", lineHeight:1.6 } }, drink.map((w,i)=>React.createElement("span", { key:w.id }, i>0 && " \u00B7 ", w.name)))
     ),
 
