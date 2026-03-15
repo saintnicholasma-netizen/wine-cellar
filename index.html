@@ -418,13 +418,60 @@ const SORT_OPTIONS = [
   { key:"default", label:"\u9ED8\u8BA4" },
   { key:"vintage-asc", label:"\u5E74\u4EFD\u2191" },
   { key:"vintage-desc", label:"\u5E74\u4EFD\u2193" },
+  { key:"price-asc", label:"\u4EF7\u683C\u2191" },
+  { key:"price-desc", label:"\u4EF7\u683C\u2193" },
   { key:"country", label:"\u56FD\u5BB6" },
   { key:"name", label:"\u9152\u540D" },
   { key:"window", label:"\u7A97\u53E3" },
   { key:"rating-desc", label:"\u8BC4\u5206\u2193" },
 ];
 
-const WINDOW_ORDER = { now:0, mid:1, long:2, vlong:3 };
+const WINDOW_ORDER = { now:0, soon:1, mid:1, wait:2, long:2, cellar:3, vlong:3, unknown:4 };
+
+// Parse price string to a numeric value (first number found) for sorting
+function parsePrice(priceStr) {
+  if (!priceStr) return 0;
+  var m = priceStr.match(/[\d,]+\.?\d*/);
+  return m ? parseFloat(m[0].replace(/,/g, "")) : 0;
+}
+
+// Currency rates to RMB
+const CURRENCY_RATES = { "\u00A5": 1, "\uFFE5": 1, "\u00A3": 9.2, "$": 7.3, "\u20AC": 7.9 };
+
+// Convert price string to RMB
+function priceToRMB(priceStr) {
+  if (!priceStr) return "";
+  // Detect currency symbol
+  var symbol = null;
+  var rate = 1;
+  if (priceStr.includes("\u00A5") || priceStr.includes("\uFFE5")) { symbol = "\u00A5"; rate = 1; }
+  else if (priceStr.includes("\u00A3")) { symbol = "\u00A3"; rate = 9.2; }
+  else if (priceStr.includes("$")) { symbol = "$"; rate = 7.3; }
+  else if (priceStr.includes("\u20AC")) { symbol = "\u20AC"; rate = 7.9; }
+  else return priceStr; // unknown currency, return as-is
+  if (rate === 1) return priceStr; // already RMB
+  // Handle range prices like "£15-20" or "£600-800"
+  var rangeMatch = priceStr.match(/([\d,]+\.?\d*)\s*[-\u2013]\s*([\d,]+\.?\d*)/);
+  if (rangeMatch) {
+    var lo = Math.round(parseFloat(rangeMatch[1].replace(/,/g,"")) * rate);
+    var hi = Math.round(parseFloat(rangeMatch[2].replace(/,/g,"")) * rate);
+    var suffix = priceStr.replace(/[^\/\u74F6\u4F30\uFF08\uFF09\(\)]+$/, "").includes("/\u74F6") ? "/\u74F6" : "";
+    if (priceStr.includes("/\u74F6")) suffix = "/\u74F6";
+    if (priceStr.includes("\uFF08\u4F30\uFF09") || priceStr.includes("(\u4F30)")) suffix += "(\u4F30)";
+    return "\u00A5" + lo + "-" + hi + suffix;
+  }
+  // Single price like "£200" or "$489"
+  var singleMatch = priceStr.match(/([\d,]+\.?\d*)/);
+  if (singleMatch) {
+    var val = Math.round(parseFloat(singleMatch[1].replace(/,/g,"")) * rate);
+    var sfx = "";
+    if (priceStr.includes("+")) sfx = "+";
+    if (priceStr.includes("/\u74F6")) sfx += "/\u74F6";
+    if (priceStr.includes("\uFF08\u4F30\uFF09") || priceStr.includes("(\u4F30)")) sfx += "(\u4F30)";
+    return "\u00A5" + val + sfx;
+  }
+  return priceStr;
+}
 
 function sortWines(wines, sortKey) {
   if (sortKey === "default") return wines;
@@ -432,6 +479,8 @@ function sortWines(wines, sortKey) {
   switch(sortKey) {
     case "vintage-asc": return sorted.sort((a,b) => (a.vintage||0) - (b.vintage||0));
     case "vintage-desc": return sorted.sort((a,b) => (b.vintage||0) - (a.vintage||0));
+    case "price-asc": return sorted.sort((a,b) => parsePrice(a.price) - parsePrice(b.price));
+    case "price-desc": return sorted.sort((a,b) => parsePrice(b.price) - parsePrice(a.price));
     case "country": return sorted.sort((a,b) => a.country.localeCompare(b.country, 'zh'));
     case "name": return sorted.sort((a,b) => a.name.localeCompare(b.name, 'zh'));
     case "window": return sorted.sort((a,b) => (WINDOW_ORDER[a.window]||0) - (WINDOW_ORDER[b.window]||0));
@@ -683,7 +732,7 @@ function DrankDialog({ wine, onConfirm, onCancel, dark }) {
 }
 
 // ── WineCard ──
-function WineCard({ wine, onDelete, onDrank, dark, idx }) {
+function WineCard({ wine, onDelete, onDrank, dark, idx, showRMB }) {
   const rec = getRec(wine);
   const wm = WINDOW_META[wine.window] || WINDOW_META.now;
   const flag = COUNTRY_FLAGS[wine.country] || "\u{1F377}";
@@ -729,7 +778,7 @@ function WineCard({ wine, onDelete, onDrank, dark, idx }) {
         React.createElement("div", { style:{ display:"flex", gap:4, flexWrap:"wrap", alignItems:"center" } },
           React.createElement("span", { style:{ fontSize:10, padding:"2px 8px", borderRadius:16, background: dark ? "rgba(5,150,105,0.15)" : wm.bg, color:wm.color, fontWeight:600 } }, wm.icon, " ", wm.label),
           React.createElement("span", { style:{ fontSize:10, padding:"2px 8px", borderRadius:16, background: dark ? "rgba(0,0,0,0.2)" : rec.b, color:rec.c, fontWeight:600 } }, rec.t),
-          !isDrank && React.createElement("span", { style:{ fontSize:10, padding:"2px 8px", borderRadius:16, background: dark ? (wine.status==="owned" ? "rgba(30,64,175,0.2)" : "rgba(100,116,139,0.2)") : (wine.status==="owned" ? "#dbeafe" : "#f1f5f9"), color: dark ? (wine.status==="owned" ? "#93c5fd" : "#94a3b8") : (wine.status==="owned" ? "#1e40af" : "#64748b"), fontWeight:600 } }, wine.status==="owned" ? "\u5DF2\u6709" : "\u63A8\u8350", wine.price ? " \u00B7 " + wine.price : ""),
+          !isDrank && React.createElement("span", { style:{ fontSize:10, padding:"2px 8px", borderRadius:16, background: dark ? (wine.status==="owned" ? "rgba(30,64,175,0.2)" : "rgba(100,116,139,0.2)") : (wine.status==="owned" ? "#dbeafe" : "#f1f5f9"), color: dark ? (wine.status==="owned" ? "#93c5fd" : "#94a3b8") : (wine.status==="owned" ? "#1e40af" : "#64748b"), fontWeight:600 } }, wine.status==="owned" ? "\u5DF2\u6709" : "\u63A8\u8350", wine.price ? " \u00B7 " + (showRMB ? priceToRMB(wine.price) : wine.price) : ""),
           isDrank && wine.rating > 0 && React.createElement(StarRating, { value: wine.rating, size:12, readonly:true })
         )
       )
@@ -746,7 +795,7 @@ function WineCard({ wine, onDelete, onDrank, dark, idx }) {
         React.createElement(StarRating, { value: wine.rating, size:14, readonly:true })
       ),
       isDrank && wine.drankDate && React.createElement("div", { style:{ color:mutedText, marginBottom:4, fontSize:11 } }, "\u{1F4C5} \u54C1\u996E\u65E5\u671F\uFF1A", wine.drankDate),
-      wine.price && React.createElement("div", { style:{ color:mutedText, marginBottom:4 } }, "\u{1F4B0} \u4EF7\u683C\uFF1A", wine.price),
+      wine.price && React.createElement("div", { style:{ color:mutedText, marginBottom:4 } }, "\u{1F4B0} \u4EF7\u683C\uFF1A", showRMB ? priceToRMB(wine.price) : wine.price, showRMB && wine.price !== priceToRMB(wine.price) ? " (" + wine.price + ")" : ""),
       React.createElement("div", { style:{ display:"flex", gap:6, marginTop:8, flexWrap:"wrap" } },
         wine.status === "owned" && onDrank && React.createElement("button", {
           onClick: e => { e.stopPropagation(); onDrank(wine); },
@@ -863,6 +912,7 @@ function Cellar({ wines, onAdd, onDelete, onUpdate, onImport, title, sub, dark }
   const [flt, setFlt] = useState("all");
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState("default");
+  const [showRMB, setShowRMB] = useState(false);
   const [showImportMsg, setShowImportMsg] = useState("");
   const [drankWine, setDrankWine] = useState(null);
   const fileRef = useRef(null);
@@ -937,7 +987,15 @@ function Cellar({ wines, onAdd, onDelete, onUpdate, onImport, title, sub, dark }
         React.createElement("select", {
           value:sort, onChange:e=>setSort(e.target.value),
           style: { padding:"8px 10px", borderRadius:10, border: dark ? "1px solid #475569" : "1px solid #d1d5db", fontSize:12, fontFamily:"inherit", outline:"none", cursor:"pointer", background: dark ? "#1e293b" : "#fff", color: dark ? "#e2e8f0" : "#111827" }
-        }, SORT_OPTIONS.map(o => React.createElement("option", { key:o.key, value:o.key }, "\u6392\u5E8F: ", o.label)))
+        }, SORT_OPTIONS.map(o => React.createElement("option", { key:o.key, value:o.key }, "\u6392\u5E8F: ", o.label))),
+        sort !== "default" && React.createElement("button", {
+          onClick:function(){setSort("default")},
+          style:{ padding:"6px 10px", borderRadius:8, border:"none", background: dark ? "rgba(239,68,68,0.15)" : "#fef2f2", color: dark ? "#f87171" : "#dc2626", fontSize:11, fontWeight:600, cursor:"pointer", fontFamily:"inherit" }
+        }, "\u21BB \u9ED8\u8BA4\u6392\u5E8F"),
+        React.createElement("button", {
+          onClick:function(){setShowRMB(!showRMB)},
+          style:{ padding:"6px 12px", borderRadius:8, border: dark ? "1px solid #475569" : "1px solid #d1d5db", background: showRMB ? (dark ? "rgba(234,179,8,0.15)" : "#fefce8") : (dark ? "#1e293b" : "#fff"), color: showRMB ? (dark ? "#facc15" : "#a16207") : (dark ? "#94a3b8" : "#6b7280"), fontSize:11, fontWeight:600, cursor:"pointer", fontFamily:"inherit" }
+        }, showRMB ? "\u00A5 \u4EBA\u6C11\u5E01 \u2713" : "\u00A5 \u663E\u793A\u4EBA\u6C11\u5E01")
       ),
       React.createElement("div", { style:{ display:"flex", gap:6, alignItems:"center", flexWrap:"wrap" } },
         React.createElement("button", { className:"export-btn", onClick:()=>exportCSV(wines, "wine-cellar-"+Date.now()+".csv"), style:{ padding:"6px 14px", borderRadius:8, border: dark ? "1px solid #475569" : "1px solid #d1d5db", background: dark ? "linear-gradient(135deg,#1e293b,#334155)" : "linear-gradient(135deg,#f0fdf4,#dcfce7)", color: dark ? "#4ade80" : "#166534", fontSize:11, fontWeight:600, cursor:"pointer", fontFamily:"inherit" } }, "\u{1F4E5} \u5BFC\u51FACSV"),
@@ -964,7 +1022,7 @@ function Cellar({ wines, onAdd, onDelete, onUpdate, onImport, title, sub, dark }
 
     // Wine list
     React.createElement("div", { style:{ display:"grid", gap:8, marginBottom:20 } },
-      list.map(function(w,i) { return React.createElement(WineCard, { key:w.id, wine:w, onDelete:onDelete, onDrank:function(wine){setDrankWine(wine)}, dark:dark, idx:i }); }),
+      list.map(function(w,i) { return React.createElement(WineCard, { key:w.id, wine:w, onDelete:onDelete, onDrank:function(wine){setDrankWine(wine)}, dark:dark, idx:i, showRMB:showRMB }); }),
       list.length===0 && React.createElement("div", { style:{ textAlign:"center", padding:32, color: dark ? "#64748b" : "#9ca3af", fontSize:13 } }, search ? "\u672A\u627E\u5230\u5339\u914D\u7684\u9152\u6B3E" : "\u6682\u65E0\u9152\u6B3E")
     ),
     React.createElement(AddForm, { onAdd:onAdd, dark:dark })
