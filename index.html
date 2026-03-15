@@ -1333,8 +1333,169 @@ function DrinkGuide({ wines, dark, onClose, onDrank, showRMB }) {
   );
 }
 
+// ── Country Explorer Overlay ──
+function CountryExplorer({ wines, dark, onClose, onSelectCountry }) {
+  var countries = {};
+  wines.forEach(function(w) {
+    if (!countries[w.country]) countries[w.country] = { wines: [], flag: COUNTRY_FLAGS[w.country] || "\u{1F377}" };
+    countries[w.country].wines.push(w);
+  });
+  var sorted = Object.keys(countries).sort(function(a,b) { return countries[b].wines.length - countries[a].wines.length; });
+  var [selected, setSelected] = useState(null);
+
+  var overlayBg = dark ? "rgba(0,0,0,0.7)" : "rgba(0,0,0,0.5)";
+  var panelBg = dark ? "#0f172a" : "#fafafa";
+  var textColor = dark ? "#e2e8f0" : "#111827";
+  var subText = dark ? "#94a3b8" : "#6b7280";
+  var cardBg = dark ? "#1e293b" : "#fff";
+  var cardBorder = dark ? "1px solid #334155" : "1px solid #e5e7eb";
+
+  return React.createElement("div", {
+    onClick: onClose,
+    style: { position:"fixed", top:0, left:0, right:0, bottom:0, background:overlayBg, zIndex:1000, display:"flex", justifyContent:"center", alignItems:"flex-start", padding:"40px 16px", overflowY:"auto" }
+  },
+    React.createElement("div", {
+      onClick: function(e) { e.stopPropagation(); },
+      style: { background:panelBg, borderRadius:20, maxWidth:600, width:"100%", padding:"24px 20px", maxHeight:"85vh", overflowY:"auto", boxShadow:"0 20px 60px rgba(0,0,0,0.3)", animation:"fadeInUp 0.3s ease-out" }
+    },
+      React.createElement("div", { style:{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 } },
+        React.createElement("div", null,
+          React.createElement("h2", { style:{ fontSize:20, fontWeight:800, margin:0, color:textColor, fontFamily:"'Georgia','STSong','SimSun',serif" } }, "\u{1F30D} \u56FD\u5BB6\u63A2\u7D22"),
+          React.createElement("p", { style:{ fontSize:12, color:subText, margin:"4px 0 0 0" } }, sorted.length, " \u4E2A\u56FD\u5BB6\u7684\u85CF\u9152")
+        ),
+        React.createElement("button", { onClick:onClose, style:{ background:"none", border:"none", fontSize:22, cursor:"pointer", color:subText, padding:4 } }, "\u2715")
+      ),
+
+      // Country grid when none selected
+      !selected && React.createElement("div", { style:{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(140px,1fr))", gap:8 } },
+        sorted.map(function(country) {
+          var c = countries[country];
+          var owned = c.wines.filter(function(w){return w.status==="owned"});
+          var rec = c.wines.filter(function(w){return w.status==="recommended"});
+          return React.createElement("div", {
+            key: country,
+            onClick: function() { setSelected(country); },
+            style: { background:cardBg, borderRadius:12, padding:"14px 12px", border:cardBorder, cursor:"pointer", textAlign:"center", transition:"transform 0.15s, box-shadow 0.15s" }
+          },
+            React.createElement("div", { style:{ fontSize:28, marginBottom:4 } }, c.flag),
+            React.createElement("div", { style:{ fontSize:13, fontWeight:700, color:textColor, marginBottom:2 } }, country),
+            React.createElement("div", { style:{ fontSize:10, color:subText } }, owned.length, " \u5DF2\u6709", rec.length > 0 ? " \u00B7 " + rec.length + " \u63A8\u8350" : "")
+          );
+        })
+      ),
+
+      // Selected country wines
+      selected && React.createElement("div", null,
+        React.createElement("button", {
+          onClick: function() { setSelected(null); },
+          style: { marginBottom:12, padding:"6px 14px", borderRadius:8, border: dark ? "1px solid #475569" : "1px solid #d1d5db", background:"transparent", color: dark ? "#94a3b8" : "#6b7280", fontSize:11, fontWeight:600, cursor:"pointer", fontFamily:"inherit" }
+        }, "\u2190 \u8FD4\u56DE\u6240\u6709\u56FD\u5BB6"),
+        React.createElement("div", { style:{ display:"flex", alignItems:"center", gap:10, marginBottom:14 } },
+          React.createElement("span", { style:{ fontSize:32 } }, countries[selected].flag),
+          React.createElement("div", null,
+            React.createElement("div", { style:{ fontSize:18, fontWeight:800, color:textColor } }, selected),
+            React.createElement("div", { style:{ fontSize:11, color:subText } }, countries[selected].wines.length, " \u6B3E\u9152")
+          )
+        ),
+        React.createElement("div", { style:{ display:"grid", gap:8 } },
+          countries[selected].wines.map(function(wine, idx) {
+            var wm = WINDOW_META[wine.window] || WINDOW_META.now;
+            return React.createElement("div", {
+              key: wine.id,
+              style: { background:cardBg, borderRadius:12, padding:"12px 14px", border:cardBorder, animation:"fadeInUp 0.2s ease-out", animationDelay:(idx*0.03)+"s" }
+            },
+              React.createElement("div", { style:{ fontSize:13, fontWeight:700, color:textColor, marginBottom:2 } }, wine.name),
+              wine.nameEn && React.createElement("div", { style:{ fontSize:10, color:subText, marginBottom:4 } }, wine.nameEn),
+              React.createElement("div", { style:{ fontSize:10, color:subText, marginBottom:4 } }, wine.region, " \u00B7 ", wine.grape),
+              React.createElement("div", { style:{ display:"flex", gap:4, flexWrap:"wrap" } },
+                React.createElement("span", { style:{ fontSize:9, padding:"2px 8px", borderRadius:10, background: dark ? "rgba(5,150,105,0.15)" : wm.bg, color:wm.color, fontWeight:600 } }, wm.icon, " ", wm.label),
+                React.createElement("span", { style:{ fontSize:9, padding:"2px 8px", borderRadius:10, background: dark ? "rgba(30,64,175,0.15)" : "#dbeafe", color: dark ? "#93c5fd" : "#1e40af", fontWeight:600 } }, wine.status === "owned" ? "\u5DF2\u6709" : wine.status === "recommended" ? "\u63A8\u8350" : "\u5DF2\u559D"),
+                wine.price && React.createElement("span", { style:{ fontSize:9, padding:"2px 8px", borderRadius:10, background: dark ? "rgba(0,0,0,0.2)" : "#f1f5f9", color:subText, fontWeight:500 } }, wine.price),
+                wine.vintage && React.createElement("span", { style:{ fontSize:9, padding:"2px 8px", borderRadius:10, background: dark ? "rgba(0,0,0,0.2)" : "#f1f5f9", color:subText, fontWeight:500 } }, wine.vintage)
+              )
+            );
+          })
+        )
+      )
+    )
+  );
+}
+
+// ── Drank History Overlay ──
+function DrankHistory({ wines, dark, onClose }) {
+  var drank = wines.filter(function(w) { return w.status === "drank"; });
+  // Sort by rating desc, then by drankDate desc
+  drank.sort(function(a, b) {
+    var ra = a.rating || 0, rb = b.rating || 0;
+    if (rb !== ra) return rb - ra;
+    return (b.drankDate || "").localeCompare(a.drankDate || "");
+  });
+
+  var overlayBg = dark ? "rgba(0,0,0,0.7)" : "rgba(0,0,0,0.5)";
+  var panelBg = dark ? "#0f172a" : "#fafafa";
+  var textColor = dark ? "#e2e8f0" : "#111827";
+  var subText = dark ? "#94a3b8" : "#6b7280";
+  var cardBg = dark ? "#1e293b" : "#fff";
+  var cardBorder = dark ? "1px solid #334155" : "1px solid #e5e7eb";
+
+  var avgRating = drank.length > 0 ? (drank.reduce(function(s,w){return s+(w.rating||0)},0) / drank.filter(function(w){return w.rating>0}).length) : 0;
+
+  return React.createElement("div", {
+    onClick: onClose,
+    style: { position:"fixed", top:0, left:0, right:0, bottom:0, background:overlayBg, zIndex:1000, display:"flex", justifyContent:"center", alignItems:"flex-start", padding:"40px 16px", overflowY:"auto" }
+  },
+    React.createElement("div", {
+      onClick: function(e) { e.stopPropagation(); },
+      style: { background:panelBg, borderRadius:20, maxWidth:600, width:"100%", padding:"24px 20px", maxHeight:"85vh", overflowY:"auto", boxShadow:"0 20px 60px rgba(0,0,0,0.3)", animation:"fadeInUp 0.3s ease-out" }
+    },
+      React.createElement("div", { style:{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 } },
+        React.createElement("div", null,
+          React.createElement("h2", { style:{ fontSize:20, fontWeight:800, margin:0, color:"#6366f1", fontFamily:"'Georgia','STSong','SimSun',serif" } }, "\u{1F37B} \u54C1\u996E\u8BB0\u5F55"),
+          React.createElement("p", { style:{ fontSize:12, color:subText, margin:"4px 0 0 0" } }, drank.length, " \u6B3E\u5DF2\u54C1\u996E", avgRating > 0 ? " \u00B7 \u5747\u5206 \u2605" + avgRating.toFixed(1) : "")
+        ),
+        React.createElement("button", { onClick:onClose, style:{ background:"none", border:"none", fontSize:22, cursor:"pointer", color:subText, padding:4 } }, "\u2715")
+      ),
+
+      drank.length === 0 && React.createElement("div", { style:{ textAlign:"center", padding:40, color:subText } },
+        React.createElement("div", { style:{ fontSize:36, marginBottom:8 } }, "\u{1F377}"),
+        React.createElement("div", { style:{ fontSize:13 } }, "\u8FD8\u6CA1\u6709\u54C1\u996E\u8BB0\u5F55"),
+        React.createElement("div", { style:{ fontSize:11, marginTop:4 } }, "\u559D\u5B8C\u4E00\u74F6\u9152\u540E\uFF0C\u70B9\u51FB\u201C\u5DF2\u559D\u8FD9\u74F6\u201D\u5E76\u8BC4\u5206")
+      ),
+
+      drank.map(function(wine, idx) {
+        var flag = COUNTRY_FLAGS[wine.country] || "\u{1F377}";
+        var stars = "";
+        for (var si = 0; si < 5; si++) { stars += si < (wine.rating || 0) ? "\u2605" : "\u2606"; }
+
+        return React.createElement("div", {
+          key: wine.id,
+          style: { background:cardBg, borderRadius:14, padding:"14px 16px", border:cardBorder, marginBottom:10, animation:"fadeInUp 0.2s ease-out", animationDelay:(idx*0.04)+"s" }
+        },
+          React.createElement("div", { style:{ display:"flex", justifyContent:"space-between", alignItems:"flex-start" } },
+            React.createElement("div", { style:{ flex:1 } },
+              React.createElement("div", { style:{ fontSize:14, fontWeight:700, color:textColor, marginBottom:2 } }, wine.name),
+              wine.nameEn && React.createElement("div", { style:{ fontSize:10, color:subText, marginBottom:4 } }, wine.nameEn),
+              React.createElement("div", { style:{ fontSize:10, color:subText } }, flag, " ", wine.region)
+            ),
+            wine.rating > 0 && React.createElement("div", { style:{ textAlign:"right", flexShrink:0 } },
+              React.createElement("div", { style:{ fontSize:16, color:"#f59e0b", letterSpacing:1 } }, stars),
+              React.createElement("div", { style:{ fontSize:10, color:subText, marginTop:2 } }, wine.rating, "/5")
+            )
+          ),
+          React.createElement("div", { style:{ display:"flex", gap:4, flexWrap:"wrap", marginTop:8 } },
+            wine.drankDate && React.createElement("span", { style:{ fontSize:9, padding:"2px 8px", borderRadius:10, background: dark ? "rgba(99,102,241,0.12)" : "#eef2ff", color: dark ? "#a5b4fc" : "#4338ca", fontWeight:500 } }, "\u{1F4C5} ", wine.drankDate),
+            wine.vintage && React.createElement("span", { style:{ fontSize:9, padding:"2px 8px", borderRadius:10, background: dark ? "rgba(0,0,0,0.2)" : "#f1f5f9", color:subText, fontWeight:500 } }, wine.vintage, "\u5E74\u4EFD"),
+            wine.price && React.createElement("span", { style:{ fontSize:9, padding:"2px 8px", borderRadius:10, background: dark ? "rgba(0,0,0,0.2)" : "#f1f5f9", color:subText, fontWeight:500 } }, wine.price)
+          ),
+          wine.notes && React.createElement("div", { style:{ fontSize:10, color:subText, fontStyle:"italic", marginTop:6, lineHeight:1.4 } }, "\u{1F4DD} ", wine.notes)
+        );
+      })
+    )
+  );
+}
+
 // ── Stats ──
-function Stats({ wines, dark, onDrinkGuide }) {
+function Stats({ wines, dark, onDrinkGuide, onCountryExplorer, onDrankHistory }) {
   const owned = wines.filter(w=>w.status==="owned");
   const drank = wines.filter(w=>w.status==="drank");
   const countries = [...new Set(wines.map(w=>w.country))];
@@ -1356,14 +1517,16 @@ function Stats({ wines, dark, onDrinkGuide }) {
       React.createElement("div", { style:{ fontSize:11, color:"#065f46" } }, "\u{1F377} \u5EFA\u8BAE\u54C1\u996E"),
       drink.length > 0 && React.createElement("div", { style:{ fontSize:9, color:"#059669", marginTop:2, opacity:0.7 } }, "\u70B9\u51FB\u67E5\u770B\u6307\u5357 \u2192")
     ),
-    React.createElement("div", { className:"stat-card", style:Object.assign({}, cardS, dark ? {} : { background:"#f5f3ff", border:"1px solid #c4b5fd" }) },
+    React.createElement("div", { className:"stat-card", onClick:function(){ onDrankHistory && onDrankHistory(); }, style:Object.assign({}, cardS, dark ? {} : { background:"#f5f3ff", border:"1px solid #c4b5fd" }, { cursor:"pointer", transition:"transform 0.15s" }) },
       React.createElement("div", { style:{ fontSize:22, fontWeight:800, color:"#6366f1" } }, drank.length),
       React.createElement("div", { style:{ fontSize:11, color:"#4f46e5" } }, "\u{1F37B} \u5DF2\u54C1\u996E"),
-      avgRating > 0 && React.createElement("div", { style:{ fontSize:10, color:"#f59e0b", marginTop:2 } }, "\u2605 \u5747\u5206 ", avgRating.toFixed(1))
+      avgRating > 0 && React.createElement("div", { style:{ fontSize:10, color:"#f59e0b", marginTop:2 } }, "\u2605 \u5747\u5206 ", avgRating.toFixed(1)),
+      React.createElement("div", { style:{ fontSize:9, color:"#6366f1", marginTop:2, opacity:0.7 } }, "\u70B9\u51FB\u67E5\u770B\u8BB0\u5F55 \u2192")
     ),
-    React.createElement("div", { className:"stat-card", style:cardS },
+    React.createElement("div", { className:"stat-card", onClick:function(){ onCountryExplorer && onCountryExplorer(); }, style:Object.assign({}, cardS, { cursor:"pointer", transition:"transform 0.15s" }) },
       React.createElement("div", { style:numS }, countries.length),
-      React.createElement("div", { style:lblS }, "\u{1F30D} \u8986\u76D6\u56FD\u5BB6")
+      React.createElement("div", { style:lblS }, "\u{1F30D} \u8986\u76D6\u56FD\u5BB6"),
+      React.createElement("div", { style:{ fontSize:9, color: dark ? "#64748b" : "#9ca3af", marginTop:2 } }, "\u70B9\u51FB\u63A2\u7D22 \u2192")
     ),
     React.createElement("div", { className:"stat-card", style:cardS },
       React.createElement("div", { style:{ fontSize:13, fontWeight:600 } }, byW.filter(b=>b.n>0).map(b=>React.createElement("span", { key:b.k, style:{ color:b.color } }, b.icon, b.n, " "))),
@@ -1381,6 +1544,8 @@ function Cellar({ wines, onAdd, onDelete, onUpdate, onImport, title, sub, dark }
   const [showImportMsg, setShowImportMsg] = useState("");
   const [drankWine, setDrankWine] = useState(null);
   const [showDrinkGuide, setShowDrinkGuide] = useState(false);
+  const [showCountryExplorer, setShowCountryExplorer] = useState(false);
+  const [showDrankHistory, setShowDrankHistory] = useState(false);
   const fileRef = useRef(null);
 
   const owned = wines.filter(w=>w.status==="owned");
@@ -1453,8 +1618,10 @@ function Cellar({ wines, onAdd, onDelete, onUpdate, onImport, title, sub, dark }
     ),
 
     showDrinkGuide && React.createElement(DrinkGuide, { wines:wines, dark:dark, onClose:function(){setShowDrinkGuide(false)}, onDrank:function(wine){setShowDrinkGuide(false);setDrankWine(wine)}, showRMB:showRMB }),
+    showCountryExplorer && React.createElement(CountryExplorer, { wines:wines, dark:dark, onClose:function(){setShowCountryExplorer(false)} }),
+    showDrankHistory && React.createElement(DrankHistory, { wines:wines, dark:dark, onClose:function(){setShowDrankHistory(false)} }),
 
-    React.createElement(Stats, { wines:wines, dark:dark, onDrinkGuide:function(){if(drink.length>0)setShowDrinkGuide(true)} }),
+    React.createElement(Stats, { wines:wines, dark:dark, onDrinkGuide:function(){if(drink.length>0)setShowDrinkGuide(true)}, onCountryExplorer:function(){setShowCountryExplorer(true)}, onDrankHistory:function(){setShowDrankHistory(true)} }),
 
     // Search + Sort + Import/Export
     React.createElement("div", { style:{ marginBottom:14, display:"flex", flexDirection:"column", gap:8 } },
@@ -1488,15 +1655,6 @@ function Cellar({ wines, onAdd, onDelete, onUpdate, onImport, title, sub, dark }
         showImportMsg && React.createElement("span", { style:{ fontSize:11, color:"#059669", fontWeight:600, animation:"fadeInUp 0.3s ease-out" } }, showImportMsg),
         search && React.createElement("span", { style:{ fontSize:11, color: dark ? "#94a3b8" : "#6b7280" } }, "\u627E\u5230 ", list.length, " \u6B3E")
       )
-    ),
-
-    // Drink now recommendation (clickable)
-    drink.length > 0 && React.createElement("div", { onClick:function(){setShowDrinkGuide(true)}, style:{ background: dark ? "linear-gradient(135deg,rgba(5,150,105,0.15),rgba(4,120,87,0.1))" : "linear-gradient(135deg,#ecfdf5,#d1fae5)", borderRadius:12, padding:14, marginBottom:14, border: dark ? "1px solid rgba(5,150,105,0.3)" : "1px solid #a7f3d0", cursor:"pointer", transition:"transform 0.15s" } },
-      React.createElement("div", { style:{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:4 } },
-        React.createElement("span", { style:{ fontSize:12, fontWeight:700, color:"#059669" } }, "\u{1F377} \u73B0\u5728\u63A8\u8350\u54C1\u996E"),
-        React.createElement("span", { style:{ fontSize:10, color:"#059669", opacity:0.7 } }, "\u70B9\u51FB\u67E5\u770B\u8BE6\u60C5 \u2192")
-      ),
-      React.createElement("div", { style:{ fontSize:11, color:"#047857", lineHeight:1.6 } }, drink.map((w,i)=>React.createElement("span", { key:w.id }, i>0 && " \u00B7 ", w.name)))
     ),
 
     // Filter pills
